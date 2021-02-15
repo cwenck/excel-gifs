@@ -12,7 +12,8 @@ WHITE = (255, 255, 255)
 # removing an alpha channel if present, and separating frames if the image is a gif.
 def process_image(original_img, size):
     frames = []
-    for frame_num in range(original_img.n_frames):
+    frame_count = original_img.n_frames
+    for frame_num in range(frame_count):
         original_img.seek(frame_num)
         frame = Image.new('RGB', original_img.size, WHITE)
         frame.paste(original_img)
@@ -63,10 +64,16 @@ def main():
     if len(args) == 4:
         size = (int(args[2]), int(args[3]))
 
-    print('Generating output of size %sx%s ... ' % (size[0], size[1]), end='')
+    print('Generating %d output frames of size %sx%s ... ' %
+          (img.n_frames, size[0], size[1]), end='')
     sys.stdout.flush()
 
     frames = process_image(img, size)
+
+    print('done')
+    print("Writing output files ... ", end='')
+    sys.stdout.flush()
+
     to_csv(frames, 'data')
 
     print('done')
