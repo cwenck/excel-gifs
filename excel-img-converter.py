@@ -52,8 +52,7 @@ def main():
     args = sys.argv
 
     if len(args) < 2 or len(args) > 4:
-        print('Usage:\n  ' + args[0] +
-              ' img_name [width] [height]', file=sys.stderr)
+        print('Usage:\n  img_name [width] [height]' % args[0], file=sys.stderr)
         sys.exit(1)
 
     # Open the image file
@@ -64,10 +63,13 @@ def main():
     if len(args) == 4:
         size = (int(args[2]), int(args[3]))
 
-    print('Generating output of size %sx%s' % (size[0], size[1]))
+    print('Generating output of size %sx%s ... ' % (size[0], size[1]), end='')
+    sys.stdout.flush()
 
     frames = process_image(img, size)
     to_csv(frames, 'data')
+
+    print('done')
 
 
 if __name__ == '__main__':
