@@ -7,20 +7,6 @@ import sys
 PIXEL_DELIMITER = ','
 
 
-def index_colors(img):
-    palette = img.getpalette()
-    num_colors = len(palette)//3
-    color_index = []
-
-    for i in range(num_colors):
-        red = palette[i]
-        green = palette[i+1]
-        blue = palette[i+2]
-        color_index.append((red, green, blue))
-
-    return color_index
-
-
 def extract_frames(gif):
     frames = []
     for frame_num in range(gif.n_frames):
