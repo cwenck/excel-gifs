@@ -5,15 +5,19 @@ import csv
 import sys
 
 PIXEL_DELIMITER = ','
+WHITE = (255, 255, 255)
 
 
-def extract_frames(gif):
+# Process an image. This handles scaling the image, converting any color modes,
+# removing an alpha channel if present, and separating frames if the image is a gif.
+def process_image(original_img, size):
     frames = []
-    for frame_num in range(gif.n_frames):
-        gif.seek(frame_num)
-        frame = Image.new("RGB", gif.size)
-        frame.paste(gif)
-        frames.append(frame)
+    for frame_num in range(original_img.n_frames):
+        original_img.seek(frame_num)
+        frame = Image.new('RGB', original_img.size, WHITE)
+        frame.paste(original_img)
+        resized_frame = frame.resize(size)
+        frames.append(resized_frame)
 
     return frames
 
@@ -47,13 +51,23 @@ def to_csv(frames, name):
 def main():
     args = sys.argv
 
-    if len(args) != 2:
-        print("Usage:\n  " + args[0] + " gif_name", file=sys.stderr)
+    if len(args) < 2 or len(args) > 4:
+        print('Usage:\n  ' + args[0] +
+              ' img_name [width] [height]', file=sys.stderr)
         sys.exit(1)
 
-    gif = Image.open(args[1])
-    frames = extract_frames(gif)
-    to_csv(frames, "data")
+    # Open the image file
+    img = Image.open(args[1])
+
+    # Determine the desired resoulution of the output
+    size = (img.width, img.height)
+    if len(args) == 4:
+        size = (int(args[2]), int(args[3]))
+
+    print('Generating output of size %sx%s' % (size[0], size[1]))
+
+    frames = process_image(img, size)
+    to_csv(frames, 'data')
 
 
 if __name__ == '__main__':
