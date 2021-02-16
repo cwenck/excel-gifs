@@ -3,13 +3,22 @@
 from PIL import Image
 import csv
 import sys
+import math
 
-PIXEL_DELIMITER = ','
 WHITE = (255, 255, 255)
 
+# Keep the max color delta <= 10 for best results
+MAX_COLOR_DELTA = 10
+COLOR_STEP = 8
 
-# Process an image. This handles scaling the image, converting any color modes,
-# removing an alpha channel if present, and separating frames if the image is a gif.
+MAX_CSV_COLUMNS = 16384
+PIXEL_DELIMITER = ','
+FRAME_DELIMITER = 'R'
+SEQUENCE_END = 'E'
+
+COLOR_APPROXIMATION_CACHE = {}
+
+
 def process_image(original_img, size):
     frames = []
     frame_count = original_img.n_frames
@@ -23,30 +32,121 @@ def process_image(original_img, size):
     return frames
 
 
-def to_csv(frames, name):
+def dist(a, b):
+    (x1, y1, z1) = a
+    (x2, y2, z2) = b
+
+    x_diff_squared = (x1 - x2) ** 2
+    y_diff_squared = (y1 - y2) ** 2
+    z_diff_squared = (z1 - z2) ** 2
+
+    return math.sqrt(x_diff_squared + y_diff_squared + z_diff_squared)
+
+
+def round_value(val, step):
+    mod = val % step
+    if mod == 0:
+        return (val, val)
+
+    delta_up = step - mod
+    delta_down = mod
+    return (val + delta_up, val - delta_down)
+
+
+def clamp(val, min, max):
+    if val > max:
+        return max
+    elif val < min:
+        return min
+    else:
+        return val
+
+
+def adjacent_colors(color):
+    (r, g, b) = color
+
+    result = []
+    for adj_r in round_value(r, COLOR_STEP):
+        for adj_g in round_value(g, COLOR_STEP):
+            for adj_b in round_value(b, COLOR_STEP):
+                result.append((clamp(adj_r, 0, 255), clamp(
+                    adj_g, 0, 255), clamp(adj_b, 0, 255)))
+
+    return result
+
+
+def approximate_color(color):
+    if color in COLOR_APPROXIMATION_CACHE:
+        return COLOR_APPROXIMATION_CACHE[color]
+
+    best = None
+    for approx_color in adjacent_colors(color):
+        distance = dist(color, approx_color)
+        if best is None or distance < best[0]:
+            best = (distance, approx_color)
+
+    COLOR_APPROXIMATION_CACHE[color] = best[1]
+    return best[1]
+
+
+def to_csv(frames):
+    def color_to_vba_long(color):
+        (r, g, b) = color
+        color_long = (b << 16) + (g << 8) + r
+        return str(color_long)
+
+    def color_to_str(color):
+        return '%s-%s-%s' % color
+
+    def action(frame, row, col, color):
+        return '|'.join((str(row), str(col), color_to_vba_long(color)))
+
+    write_csv(frames, 'data.csv', action)
+
+
+def pixel_at(frame, row, col):
+    if frame is None:
+        return None
+    else:
+        return frame.getpixel((col, row))
+
+
+def buffer_add(buffer, writer, value):
+    if len(buffer) == MAX_CSV_COLUMNS:
+        writer.writerow(buffer)
+        return []
+    else:
+        return buffer + [value]
+
+
+def write_csv(frames, name, action):
     width = frames[0].width
     height = frames[0].height
 
-    with open(name + '-r.csv', 'w') as r_file, open(name + '-g.csv', 'w') as g_file, open(name + '-b.csv', 'w') as b_file:
-        r_writer = csv.writer(r_file, delimiter=PIXEL_DELIMITER)
-        g_writer = csv.writer(g_file, delimiter=PIXEL_DELIMITER)
-        b_writer = csv.writer(b_file, delimiter=PIXEL_DELIMITER)
+    with open(name, 'w') as file:
+        writer = csv.writer(file, delimiter=PIXEL_DELIMITER)
+        last_frame = None
+        buffer = []
+        for frame in frames:
+            for row in range(height):
+                for col in range(width):
+                    color = approximate_color(frame.getpixel((col, row)))
+                    last_color = None
+                    if last_frame is not None:
+                        last_color = approximate_color(last_frame.getpixel(
+                            (col, row)))
 
-        for row in range(height):
-            for col in range(width):
-                csv_row_r = []
-                csv_row_g = []
-                csv_row_b = []
+                    if last_color is None or dist(color, last_color) >= MAX_COLOR_DELTA:
+                        buffer = buffer_add(
+                            buffer, writer, action(frame, row, col, color))
 
-                for frame in frames:
-                    (r, g, b) = frame.getpixel((col, row))
-                    csv_row_r.append(str(r))
-                    csv_row_g.append(str(g))
-                    csv_row_b.append(str(b))
+            buffer = buffer_add(buffer, writer, FRAME_DELIMITER)
+            last_frame = frame
 
-                r_writer.writerow(csv_row_r)
-                g_writer.writerow(csv_row_g)
-                b_writer.writerow(csv_row_b)
+        buffer = buffer_add(buffer, writer, SEQUENCE_END)
+        if len(buffer) > 0:
+            writer.writerow(buffer)
+            buffer = []
 
 
 def main():
@@ -74,7 +174,7 @@ def main():
     print("Writing output files ... ", end='')
     sys.stdout.flush()
 
-    to_csv(frames, 'data')
+    to_csv(frames)
 
     print('done')
 

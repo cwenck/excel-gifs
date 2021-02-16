@@ -2,9 +2,9 @@
 
 package: data.zip
 
-data.zip: data-r.csv data-g.csv data-b.csv
-	zip -9 data.zip data-r.csv data-g.csv data-b.csv
+data.zip: *.csv
+	zip -9 data.zip *.csv
 
 clean:
-	rm data-r.csv data-g.csv data-b.csv
+	rm *.csv
 	rm data.zip
